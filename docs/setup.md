@@ -82,7 +82,8 @@ Put project skills in `.agents/skills/<name>/SKILL.md`. Each engine finds skills
 
 | Location | Found by |
 |---|---|
-| `.agents/skills/<name>/SKILL.md` | All engines |
+| `.agents/skills/<name>/SKILL.md` | Pi and OMP |
+| `.claude/skills/<name>/SKILL.md` | Claude Code |
 | `.omp/skills/<name>/SKILL.md` | OMP |
 | `.pi/skills/<name>/SKILL.md` | Pi |
 | `.pi/skills/<name>.md` (older flat files) | Pi |
@@ -193,7 +194,7 @@ limen spawn --engine claude --model opus --thinking high \
 - **Permissions.** The job starts with `--permission-mode bypassPermissions`, because no person can answer a permission request.
 - **Guidance.** Limen writes the role preamble and the project guidance to `claude-system.md` in the job folder and gives that file to Claude Code as an added system prompt. The first prompt holds the turn cue, the task note request and the task. The job gets the turn cue one time, in that prompt.
 - **Turns.** Limen writes each prompt to the standard input of Claude Code. After the first clean turn, Limen sends the note check one time. The message of that turn is the job result. Then Limen closes the input and Claude Code exits. There is no `finish` tool.
-- **Steer.** `limen steer` works. A steer that arrives during a tool call reaches the agent after that tool call, in the same turn. A steer that arrives while the agent writes text gets a turn of its own. A steer that arrives while the agent writes its note check gets the last turn, and the reply to that steer is the job result. After the last turn ends, `limen steer` refuses a steer.
+- **Steer.** `limen steer` works. A steer that arrives during a tool call reaches the agent after that tool call, in the same turn. A steer that arrives while the agent writes text gets a turn of its own. A steer that arrives while the agent writes its note check gets the last turn, and the reply to that steer is the job result. After the last turn ends, `limen steer` refuses a steer; a steer that `limen steer` accepts in the same instant as that end is lost.
 - **Continue.** `limen continue` starts Claude Code with `--resume <session id> --fork-session`. The new job keeps the conversation of the parent and gets a session id of its own. Claude Code keeps its own transcript under `~/.claude/projects/`; a continue needs that transcript on the same seat.
 - **Transcript.** Limen writes the turns of the job to `session/` in the job folder, in the shape of a Pi transcript. `limen jobs` reads the model, the token counts and the proof of shell commands from that file. The file name ends in the Claude Code session id.
 - **Skills.** Claude Code reads project skills from `.claude/skills/`. It does not read `.agents/skills/`.
@@ -218,7 +219,7 @@ Claude Code can be the coordinator. It loads no Limen extension, so two steps gi
 
 **Wake.** A job wakes a Claude Code coordinator in one of two ways:
 
-- In Herdr: start the coordinator with `herdr agent start <name> --kind claude`. `limen spawn` records the pane, and the finish of the job types its wake into that pane. Herdr refuses the wake while the pane shows a permission request or a question; Limen tries 2 times, then the wake is lost and `limen jobs <id>` shows the result.
+- In Herdr: start the coordinator with `herdr agent start <name> --kind claude -- --settings ~/.claude/limen-coordinator.json --append-system-prompt "$(limen context)"`. `limen spawn` records the pane, and the finish of the job types its wake into that pane. Herdr refuses the wake while the pane shows a permission request or a question; Limen tries 2 times, then the wake is lost and `limen jobs <id>` shows the result.
 - Outside Herdr: run `limen wait <id>` as a background shell command. Claude Code starts a new turn when that command exits. Do not set `LIMEN_COORDINATOR=1`, because `limen wait` then refuses a running job.
 
 The status footer and the `/limen` command of the Pi wake hook are not available in Claude Code.

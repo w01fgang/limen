@@ -16,7 +16,7 @@ const SESSION_FILE = /_([0-9a-f]{8}-[0-9a-f-]{27})\.jsonl$/;
 const RESULT_TEXT_CHARS = 20_000;
 // The job result is the last message, and the note check asks for one more message after the handoff.
 const HANDOFF = 'That final message is the whole handoff of this job: give your handoff again, then the "Note check".';
-/** Variables of the Claude Code session that ran `limen`; a job is a session of its own and must not inherit them. */
+/** Variables of the Claude Code session that ran `limen`; a job of any engine is a session of its own and must not inherit them. */
 export const CLAUDE_SESSION_ENVIRONMENT =
 	"CLAUDECODE CLAUDE_PID CLAUDE_EFFORT CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXECPATH CLAUDE_CODE_MESSAGING_SOCKET CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_SESSION_ATTENDED CLAUDE_CODE_SESSION_ID CLAUDE_CODE_VERSION";
 
@@ -152,9 +152,9 @@ function claudeSession(jobDir: string, firstPrompt: string): Omit<ClaudeJob, "ar
 		sent += 1;
 	};
 	const end = () => {
-		steers?.stop();
-		// `limen steer` waits for this file; without it a late steer is refused, and none waits unread in the inbox.
+		// `limen steer` waits for this file; without it a late steer is refused.
 		rmSync(join(jobDir, "steer", "ready"), { force: true });
+		steers?.stop();
 		stdin?.end();
 	};
 	const turnEnded = (failed: boolean) => {
@@ -295,7 +295,9 @@ function claudeTranscript(jobDir: string) {
 			for (const part of parts(message.content)) {
 				if (part.type === "text" && text(part.text).trim()) {
 					pending.content.push({ type: "text", text: text(part.text) });
-					events.push({ kind: "assistant", text: text(part.text).trim() });
+					// The job result is the last assistant event, so it holds every text block of the message so far.
+					const said = pending.content.filter((block) => block.type === "text").map((block) => text(block.text).trim());
+					events.push({ kind: "assistant", text: said.join("\n\n") });
 				} else if (part.type === "tool_use") {
 					const name = text(part.name).toLowerCase() || "tool";
 					tools.set(text(part.id), name);

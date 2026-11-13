@@ -117,7 +117,7 @@ export function preflightEngine(profile: EngineProfile, model?: string, provider
 	}
 	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/${profile.binaryDefault}`))) {
 		throw new Error(
-			`${profile.binaryDefault} is not on PATH; install it, or pass --engine ${profile.id === "omp" ? "pi" : "omp"}`,
+			`${profile.binaryDefault} is not on PATH; install it${profile.id === "claude" ? "" : `, or pass --engine ${profile.id === "omp" ? "pi" : "omp"}`}`,
 		);
 	}
 	// The bridge signs in through Claude Code, so Pi's own auth store has no say over a bridged route.
