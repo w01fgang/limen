@@ -400,7 +400,8 @@ export async function runInternalJob(): Promise<void> {
 		const failedReason = isFailedStopReason(seen.stop) ? seen.stop : "";
 		await finalizeJob(jobDir, failedReason ? "failed" : "done", failedReason || `${profile.id} exited 0`);
 	} else {
-		await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
+		const exit = `worker exited with code ${result.code ?? "unknown"}`;
+		await finalizeJob(jobDir, "failed", isFailedStopReason(seen.stop) ? `${seen.stop} (${exit})` : exit);
 	}
 }
 export async function failInternalJob(error: unknown): Promise<void> {
