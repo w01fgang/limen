@@ -141,6 +141,7 @@ function claudeSession(jobDir: string, firstPrompt: string): Omit<ClaudeJob, "ar
 	let stdin: Writable | undefined;
 	let steers: ReturnType<typeof watchSteerInbox>;
 	let checked = false;
+	let handoffDue = false;
 	let sent = 0;
 	let taken = 0;
 	let noteSeen = readOptional(join(jobDir, "note.md"));
@@ -173,9 +174,15 @@ function claudeSession(jobDir: string, firstPrompt: string): Omit<ClaudeJob, "ar
 			}
 			const before = sent;
 			steers?.sweep();
-			if (sent === before) {
-				end();
+			if (sent !== before) {
+				return;
 			}
+			// The last message is the job result: after a steer it must be a handoff again.
+			if (handoffDue) {
+				handoffDue = false;
+				return send(`${noteCheck(jobDir, false)}\n${HANDOFF}`);
+			}
+			end();
 		} catch {
 			end();
 		}
@@ -217,7 +224,10 @@ function claudeSession(jobDir: string, firstPrompt: string): Omit<ClaudeJob, "ar
 			// The wrapper learns of a closed pipe from the process exit.
 			input.on("error", () => {});
 			send(firstPrompt);
-			steers = watchSteerInbox(jobDir, send);
+			steers = watchSteerInbox(jobDir, (steer) => {
+				send(steer);
+				handoffDue = checked;
+			});
 		},
 		stop: end,
 	};
