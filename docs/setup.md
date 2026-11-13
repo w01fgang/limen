@@ -78,7 +78,7 @@ The agent you talk to is the coordinator. Give it the task in plain language. It
 
 ### Project skills
 
-Put project skills in `.agents/skills/<name>/SKILL.md`. Each engine finds skills in these places:
+Put project skills in `.agents/skills/<name>/SKILL.md`. For Claude Code jobs, put them in `.claude/skills/<name>/SKILL.md` also. Each engine finds skills in these places:
 
 | Location | Found by |
 |---|---|
@@ -201,7 +201,7 @@ limen spawn --engine claude --model opus --thinking high \
 
 ### A Claude Code coordinator
 
-Claude Code can be the coordinator. It loads no Limen extension, so two steps give it the guidance that the Pi and OMP hooks give.
+Claude Code can be the coordinator. It loads no Limen extension, so two steps give it the system guidance and the turn cue of the Pi and OMP hooks.
 
 1. Write the turn cue as a `UserPromptSubmit` hook to a settings file, for example `~/.claude/limen-coordinator.json`:
 
@@ -215,14 +215,14 @@ Claude Code can be the coordinator. It loads no Limen extension, so two steps gi
    claude --settings ~/.claude/limen-coordinator.json --append-system-prompt "$(limen context)"
    ```
 
-`limen context` prints the system guidance that the communication hook gives a Pi coordinator: the capability frame, the shop manual, the register, the vision, the styleguide and the board digest are in it. `limen context --cue` prints the turn cue with the seat-wide rules. Start a new session after the vision, the styleguide or the board changes.
+`limen context` prints the system guidance that the communication hook gives a Pi coordinator: the capability frame, the shop manual, the register, the vision, the styleguide and the board digest are in it. The shop manual is in it only when the project has no `AGENTS.md`. Claude Code does not read `AGENTS.md`, so a project that has one names it in its `CLAUDE.md` with the line `@AGENTS.md`. On Linux, one command argument holds 128 KiB or less, and `claude` does not start when the guidance is larger. `limen context --cue` prints the turn cue with the seat-wide rules. Start a new session after the vision, the styleguide or the board changes.
 
 **Wake.** A job wakes a Claude Code coordinator in one of two ways:
 
 - In Herdr: start the coordinator with `herdr agent start <name> --kind claude -- --settings ~/.claude/limen-coordinator.json --append-system-prompt "$(limen context)"`. `limen spawn` records the pane, and the finish of the job types its wake into that pane. Herdr refuses the wake while the pane shows a permission request or a question; Limen tries 2 times, then the wake is lost and `limen jobs <id>` shows the result.
 - Outside Herdr: run `limen wait <id>` as a background shell command. Claude Code starts a new turn when that command exits. Do not set `LIMEN_COORDINATOR=1`, because `limen wait` then refuses a running job.
 
-The status footer and the `/limen` command of the Pi wake hook are not available in Claude Code.
+The status footer and the `/limen` command of the Pi wake hook are not available in Claude Code. The reminders that the communication hook adds after a write, an edit or a failed tool call are not available.
 
 ## Adjacent-repository workspaces
 
