@@ -132,8 +132,8 @@ function parentSession(jobDir: string): string | undefined {
 }
 
 /**
- * Drives one job. After the first clean turn the worker gets its task note to check, once; the turn after that is
- * the handoff. A prompt that still waits for its turn, or a steer that waits when a turn ends, keeps the input open.
+ * Drives one job. After the first clean turn the worker gets its task note to check; the turn after that is the
+ * handoff. A steer after the check gets its turn, then the check and the handoff request go out again. A prompt that still waits for its turn, or a steer that waits when a turn ends, keeps the input open.
  * Then stdin closes and Claude Code exits.
  */
 function claudeSession(jobDir: string, firstPrompt: string): Omit<ClaudeJob, "args"> {
@@ -237,7 +237,8 @@ function claudeSession(jobDir: string, firstPrompt: string): Omit<ClaudeJob, "ar
 /** Claude Code writes an error text as a message of the model `<synthetic>`: no API call made it, so it is no turn. */
 function syntheticText(message: Fields): StreamEvent {
 	const said = parts(message.content).map((part) => text(part.text).trim());
-	return { kind: "assistant", text: said.filter(Boolean).join("\n\n") };
+	const all = said.filter(Boolean).join("\n\n");
+	return all ? { kind: "assistant", text: all } : { kind: "activity", name: "think" };
 }
 
 /** Empty for a clean turn; else a stop reason the job record reads as failed. */
