@@ -195,7 +195,8 @@ function claudeSession(jobDir: string, firstPrompt: string): Omit<ClaudeJob, "ar
 				return { kind: "activity", name: "think" };
 			}
 			if (line.type === "assistant") {
-				return transcript.assistant(fields(line.message));
+				const message = fields(line.message);
+				return message.model === "<synthetic>" ? [syntheticText(message)] : transcript.assistant(message);
 			}
 			if (line.type === "user") {
 				if (line.isReplay === true) {
@@ -231,6 +232,12 @@ function claudeSession(jobDir: string, firstPrompt: string): Omit<ClaudeJob, "ar
 		},
 		stop: end,
 	};
+}
+
+/** Claude Code writes an error text as a message of the model `<synthetic>`: no API call made it, so it is no turn. */
+function syntheticText(message: Fields): StreamEvent {
+	const said = parts(message.content).map((part) => text(part.text).trim());
+	return { kind: "assistant", text: said.filter(Boolean).join("\n\n") };
 }
 
 /** Empty for a clean turn; else a stop reason the job record reads as failed. */
