@@ -8,7 +8,7 @@ Install Limen, define the project, and ask an agent to do the work.
 
 - **Operating system:** macOS or Linux. Limen does not support Windows.
 - **Tools:** Node.js 24 or later, and Git.
-- **Engine:** Pi (`pi`, the default) or OMP (`omp`) on `PATH`.
+- **Engine:** Pi (`pi`, the default), OMP (`omp`) or Claude Code (`claude`) on `PATH`.
 - **Last known-good versions:** pi 1.2.0, omp 18.4.4 and Herdr 0.9.1. Limen records the versions on each job, but it does not refuse other versions.
 
 ## Install
@@ -101,9 +101,9 @@ Project choices are in `spec/build.md`. The board records the engine, provider, 
 
 The coordinator must pass the board choices explicitly. Package fallbacks apply when command flags and environment variables do not select a setting.
 
-**Engine.** `--engine pi|omp|devin` selects the job's agent: the Pi or OMP binary on the seat, or a Devin cloud session (see [Devin cloud jobs](#devin-cloud-jobs)). The order of priority is:
+**Engine.** `--engine pi|omp|devin|claude` selects the job's agent: the Pi or OMP binary on the seat, a Devin cloud session (see [Devin cloud jobs](#devin-cloud-jobs)), or headless Claude Code (see [Claude Code jobs](#claude-code-jobs)). The order of priority is:
 
-1. `--engine pi|omp|devin`
+1. `--engine pi|omp|devin|claude`
 2. `LIMEN_ENGINE` (for example, `LIMEN_ENGINE=omp` selects OMP)
 3. Pi, for new jobs, when neither is set
 
@@ -118,7 +118,7 @@ Two exceptions apply:
 2. `LIMEN_WORKER_MODEL` (or `LIMEN_REVIEWER_MODEL` for `--review`)
 3. the built-in `openai-codex/gpt-6-astra:high`
 
-A Devin job takes only `--model`: it names a Devin mode, and without it the organization's default mode runs.
+A Devin job takes only `--model`: it names a Devin mode, and without it the organization's default mode runs. A Claude Code job takes only `--model`: it names a Claude model or alias, and without it the model that Claude Code is configured for runs. The two environment variables and the built-in model do not apply to it.
 
 **`pi-claude` on both engines.** A `pi-claude` model runs on the Claude Code bridge, which Limen names with `--extension`, because jobs otherwise start with `--no-extensions`. Pi loads the `pi-claude-bridge` package that `pi install` put under `~/.pi/agent/npm/node_modules` (scoped or not), and takes `--provider pi-claude --model claude-opus-5-5` or `--model pi-claude/claude-opus-5-5` as given. OMP loads the local bridge at `~/.omp/local/pi-claude-bridge` and has no `pi-claude` provider: a command that requires `--provider` takes `--provider pi-claude`, and Limen keeps it in the job record and off the OMP command line, so `--provider pi-claude --model claude-opus-5-5` means `--model pi-claude/claude-opus-5-5`. `spawn`, `continue` and `group start` refuse a missing bridge before any job exists. On OMP they also refuse a `pi-claude` provider with another provider's model. With `LIMEN_PREFLIGHT=auth`, a bridged route skips `pi auth check`, because the bridge signs in through Claude Code.
 
@@ -177,6 +177,51 @@ limen spawn --engine devin --provider macos --model normal \
 - **End.** When the session waits for the user or reports finished, Limen fetches the branch and fast-forwards the worktree with `git merge --ff-only FETCH_HEAD`, writes Devin's last message as the result, and ends the job `done`. A branch that does not fast-forward, such as rewritten history, fails the job and leaves the worktree unchanged. A session that suspends (inactivity, quota, an error), exits early or errors fails the job and names the reason. `limen stop` and the job timeout terminate the session. A finished session stays in Devin waiting for the user, and sleeps on its own.
 - **Credentials.** `DEVIN_API_KEY` and `DEVIN_ORG_ID` when set; otherwise the Devin CLI login: the key in `~/.local/share/devin/credentials.toml` and the org id that `devin cloud drs whoami` prints (sign in with `devin auth login`). `DEVIN_API_URL` changes the API host from `https://api.devin.ai`. The key goes only into the Authorization header of each request, never into a log, a job file or the prompt.
 - **The pushed branch stays on origin.** Delete it after you land or drop the job: `git push origin --delete <branch>`.
+
+### Claude Code jobs
+
+`--engine claude` runs the job's agent as headless Claude Code on the seat. The job is a detached Limen job: it has a worktree, a log, a timeout, a tool-call cap and process containment.
+
+```bash
+limen spawn --engine claude --model opus --thinking high \
+  --label "what this changes · FNNN" 'Implement FNNN: <outcome>. Ticket: spec/features/active/FNNN-slug/ticket.md'
+```
+
+- **Flags.** `--model` names a Claude model or alias. `--thinking` is the Claude Code effort: `low`, `medium`, `high`, `xhigh` or `max`. Spawn refuses `--provider`, `--extension` and `--tab`. A group team cannot use this engine. `limen keeper`, `limen github` and `limen picture watch` require `--provider`, so they need Pi or OMP.
+- **Sign-in.** The job uses the Claude Code login of the seat. Run `claude` one time and sign in before the first job.
+- **Isolation.** The job starts with `--setting-sources project --strict-mcp-config`. The user settings, user hooks, plugins, MCP servers and the user `CLAUDE.md` stay off. The `.claude/settings.json` and `CLAUDE.md` of the project in the worktree load.
+- **Permissions.** The job starts with `--permission-mode bypassPermissions`, because no person can answer a permission request.
+- **Guidance.** Limen writes the role preamble and the project guidance to `claude-system.md` in the job folder and gives that file to Claude Code as an added system prompt. The first prompt holds the turn cue, the task note request and the task. The job gets the turn cue one time, in that prompt.
+- **Turns.** Limen writes each prompt to the standard input of Claude Code. After the first clean turn, Limen sends the note check one time. The message of that turn is the job result. Then Limen closes the input and Claude Code exits. There is no `finish` tool.
+- **Steer.** `limen steer` works. A steer that arrives during a tool call reaches the agent after that tool call, in the same turn. A steer that arrives while the agent writes text gets a turn of its own. A steer that arrives while the agent writes its note check gets the last turn, and the reply to that steer is the job result. After the last turn ends, `limen steer` refuses a steer.
+- **Continue.** `limen continue` starts Claude Code with `--resume <session id> --fork-session`. The new job keeps the conversation of the parent and gets a session id of its own. Claude Code keeps its own transcript under `~/.claude/projects/`; a continue needs that transcript on the same seat.
+- **Transcript.** Limen writes the turns of the job to `session/` in the job folder, in the shape of a Pi transcript. `limen jobs` reads the model, the token counts and the proof of shell commands from that file. The file name ends in the Claude Code session id.
+- **Skills.** Claude Code reads project skills from `.claude/skills/`. It does not read `.agents/skills/`.
+
+### A Claude Code coordinator
+
+Claude Code can be the coordinator. It loads no Limen extension, so two steps give it the guidance that the Pi and OMP hooks give.
+
+1. Write the turn cue as a `UserPromptSubmit` hook to a settings file, for example `~/.claude/limen-coordinator.json`:
+
+   ```json
+   { "hooks": { "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "limen context --cue" }] }] } }
+   ```
+
+2. Start Claude Code in the project with that file and with the stable guidance as an added system prompt:
+
+   ```bash
+   claude --settings ~/.claude/limen-coordinator.json --append-system-prompt "$(limen context)"
+   ```
+
+`limen context` prints the system guidance that the communication hook gives a Pi coordinator: the capability frame, the shop manual, the register, the vision, the styleguide and the board digest are in it. `limen context --cue` prints the turn cue with the seat-wide rules. Start a new session after the vision, the styleguide or the board changes.
+
+**Wake.** A job wakes a Claude Code coordinator in one of two ways:
+
+- In Herdr: start the coordinator with `herdr agent start <name> --kind claude`. `limen spawn` records the pane, and the finish of the job types its wake into that pane. Herdr refuses the wake while the pane shows a permission request or a question; Limen tries 2 times, then the wake is lost and `limen jobs <id>` shows the result.
+- Outside Herdr: run `limen wait <id>` as a background shell command. Claude Code starts a new turn when that command exits. Do not set `LIMEN_COORDINATOR=1`, because `limen wait` then refuses a running job.
+
+The status footer and the `/limen` command of the Pi wake hook are not available in Claude Code.
 
 ## Adjacent-repository workspaces
 

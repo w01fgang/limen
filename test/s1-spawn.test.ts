@@ -43,7 +43,7 @@ test("each spawn refusal exits 1, names its cause and leaves no job, worktree or
 	const refusals: ReadonlyArray<readonly [readonly string[], string, Record<string, string>?]> = [
 		[[`Implement F002. Ticket: ${draft}`], draft],
 		[["--role", "coordinator", "work"], "coordinator"],
-		[["--engine", "claude", "work"], "--engine"],
+		[["--engine", "codex", "work"], "--engine"],
 		[["--engine", "pi", "work"], "PATH", { PATH: "/usr/bin:/bin" }],
 		[["--engine", "pi", "--extension", "missing.ts", "work"], "missing.ts"],
 		[["--engine", "omp", "--extension", "README.md", "work"], "--extension"],
@@ -53,6 +53,10 @@ test("each spawn refusal exits 1, names its cause and leaves no job, worktree or
 		[["--engine", "devin", "--thinking", "high", "work"], "--thinking"],
 		[["--engine", "devin", "--provider", "windows", "work"], "macos or linux"],
 		[["--engine", "devin", "work"], "DEVIN_API_KEY"],
+		[["--engine", "claude", "--tab", "work"], "detached only"],
+		[["--engine", "claude", "--provider", "anthropic", "work"], "has no provider"],
+		[["--engine", "claude", "--extension", "x.ts", "work"], "loads no Pi or OMP extension"],
+		[["--engine", "claude", "--thinking", "minimal", "work"], "low, medium, high, xhigh, max"],
 	];
 	for (const [args, cause, env] of refusals) {
 		const run = limen(p, ["spawn", ...args], env ? { env } : {});

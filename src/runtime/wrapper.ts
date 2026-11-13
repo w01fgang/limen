@@ -13,6 +13,7 @@ import {
 	writeHandshake,
 } from "../job/record.ts";
 import { enqueueSteer } from "../job/steer-inbox.ts";
+import { CLAUDE_SESSION_ENVIRONMENT, claudeJob } from "./claude.ts";
 import {
 	containEscapedDescendants,
 	discoverEscapedDescendants,
@@ -170,26 +171,40 @@ export async function runInternalJob(): Promise<void> {
 		})();
 	};
 	const skillConfig = profile.id === "omp" ? await prepareSkillConfig(worktree, jobDir) : undefined;
-	const args = argvFor(profile, {
-		jsonMode: true,
-		jobDir,
-		...(skillConfig ? { skillConfig } : {}),
-		label,
-		preamble,
-		extensions: [
-			`${HOOK}/finish.ts`,
-			`${HOOK}/steering.ts`,
-			`${HOOK}/communication.ts`,
-			...((await jobMembership(jobDir)) ? [`${HOOK}/group-peer.ts`] : []),
-			...(await readWorkerExtensions(jobDir, profile.id)),
-		],
-		...(process.env.LIMEN_PROVIDER ? { provider: process.env.LIMEN_PROVIDER } : {}),
-		...(process.env.LIMEN_MODEL ? { model: process.env.LIMEN_MODEL } : {}),
-		...(process.env.LIMEN_THINKING ? { thinking: process.env.LIMEN_THINKING } : {}),
-		...(process.env.LIMEN_CONTINUE === "1"
-			? { continueValue: (await readFile(taskFile, "utf8")).trim() }
-			: { taskFile }),
-	});
+	const claude =
+		profile.id === "claude"
+			? claudeJob({
+					jobDir,
+					root: process.env.LIMEN_CONTEXT_ROOT || worktree,
+					preamble,
+					task: (await readFile(taskFile, "utf8")).trim(),
+					continued: process.env.LIMEN_CONTINUE === "1",
+					...(process.env.LIMEN_MODEL ? { model: process.env.LIMEN_MODEL } : {}),
+					...(process.env.LIMEN_THINKING ? { thinking: process.env.LIMEN_THINKING } : {}),
+				})
+			: undefined;
+	const args =
+		claude?.args ??
+		argvFor(profile, {
+			jsonMode: true,
+			jobDir,
+			...(skillConfig ? { skillConfig } : {}),
+			label,
+			preamble,
+			extensions: [
+				`${HOOK}/finish.ts`,
+				`${HOOK}/steering.ts`,
+				`${HOOK}/communication.ts`,
+				...((await jobMembership(jobDir)) ? [`${HOOK}/group-peer.ts`] : []),
+				...(await readWorkerExtensions(jobDir, profile.id)),
+			],
+			...(process.env.LIMEN_PROVIDER ? { provider: process.env.LIMEN_PROVIDER } : {}),
+			...(process.env.LIMEN_MODEL ? { model: process.env.LIMEN_MODEL } : {}),
+			...(process.env.LIMEN_THINKING ? { thinking: process.env.LIMEN_THINKING } : {}),
+			...(process.env.LIMEN_CONTINUE === "1"
+				? { continueValue: (await readFile(taskFile, "utf8")).trim() }
+				: { taskFile }),
+		});
 	const childEnvironment: NodeJS.ProcessEnv = {
 		...process.env,
 		LIMEN_JOB: "1",
@@ -197,8 +212,7 @@ export async function runInternalJob(): Promise<void> {
 		LIMEN_JOB_LABEL: label,
 	};
 	// A detached job started from a hosted pane's shell must not read itself as hosted.
-	const privateEnvironment =
-		"LIMEN_INTERNAL_RUN LIMEN_JOB_DIR LIMEN_WORKTREE LIMEN_TASK_FILE LIMEN_PREAMBLE LIMEN_TIMEOUT_MS LIMEN_MODEL LIMEN_PROVIDER LIMEN_THINKING LIMEN_LABEL LIMEN_SETUP_KEEP LIMEN_SETUP_PREPARE LIMEN_HOSTED PI_SESSION_ID PI_SESSION_FILE PI_PROVIDER PI_MODEL PI_REASONING_LEVEL";
+	const privateEnvironment = `LIMEN_INTERNAL_RUN LIMEN_JOB_DIR LIMEN_WORKTREE LIMEN_TASK_FILE LIMEN_PREAMBLE LIMEN_TIMEOUT_MS LIMEN_MODEL LIMEN_PROVIDER LIMEN_THINKING LIMEN_LABEL LIMEN_SETUP_KEEP LIMEN_SETUP_PREPARE LIMEN_HOSTED PI_SESSION_ID PI_SESSION_FILE PI_PROVIDER PI_MODEL PI_REASONING_LEVEL${claude ? ` ${CLAUDE_SESSION_ENVIRONMENT}` : ""}`;
 	for (const name of privateEnvironment.split(" ")) {
 		delete childEnvironment[name];
 	}
@@ -208,7 +222,7 @@ export async function runInternalJob(): Promise<void> {
 			delete childEnvironment[name];
 		}
 	}
-	const parser = createStreamParser();
+	const parser = createStreamParser(claude?.read);
 	const seen = { activity: "", activityAt: 0, assistant: "", stop: "", tool: "", progress: 0 };
 	const failLog = (error: unknown) =>
 		appendLimenLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(
@@ -234,9 +248,12 @@ export async function runInternalJob(): Promise<void> {
 	};
 	const child = spawn(engineBinary(profile), args, {
 		cwd: worktree,
-		stdio: ["ignore", "pipe", "pipe"],
+		stdio: [claude ? "pipe" : "ignore", "pipe", "pipe"],
 		env: childEnvironment,
 	});
+	if (claude && child.stdin) {
+		claude.start(child.stdin);
+	}
 	// A pipe can cut a multi-byte UTF-8 letter between two chunks; the stream's decoder keeps the cut bytes for the next one.
 	child.stdout?.setEncoding("utf8");
 	child.stdout?.on("data", (chunk: string) => apply(parser.push(chunk)));
@@ -356,6 +373,7 @@ export async function runInternalJob(): Promise<void> {
 		void enqueueSteer(jobDir, text).catch(failLog);
 	}, steerAt);
 	const result = await outcome;
+	claude?.stop();
 	clearTimeout(timeout);
 	clearTimeout(deadlineSteer);
 	clearInterval(stallTimer);

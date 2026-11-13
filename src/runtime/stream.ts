@@ -4,9 +4,14 @@ export type StreamEvent =
 	| { readonly kind: "assistant"; readonly text: string; readonly stopReason?: string }
 	| { readonly kind: "tool"; readonly name: string; readonly detail?: string }
 	| { readonly kind: "activity"; readonly name: Activity };
-export function createStreamParser(): { push(chunk: string): StreamEvent[]; flush(): StreamEvent[] } {
+/** What one JSON line of an engine's stream means: no event, one, or several (a line can hold several tool calls). */
+export type StreamInterpreter = (event: unknown) => StreamEvent | readonly StreamEvent[] | undefined;
+export function createStreamParser(read: StreamInterpreter = interpret): {
+	push(chunk: string): StreamEvent[];
+	flush(): StreamEvent[];
+} {
 	let buffer = "";
-	const take = (line: string): StreamEvent | undefined => {
+	const take = (line: string): StreamEvent | readonly StreamEvent[] | undefined => {
 		const trimmed = line.trim();
 		if (!trimmed) {
 			return;
@@ -14,10 +19,19 @@ export function createStreamParser(): { push(chunk: string): StreamEvent[]; flus
 		if (!trimmed.startsWith("{")) {
 			return { kind: "log", line: trimmed };
 		}
+		let parsed: unknown;
 		try {
-			return interpret(JSON.parse(trimmed));
+			parsed = JSON.parse(trimmed);
 		} catch {
 			return { kind: "log", line: trimmed };
+		}
+		try {
+			return read(parsed);
+		} catch (error: unknown) {
+			return {
+				kind: "log",
+				line: `[limen] unread stream line: ${error instanceof Error ? error.message : String(error)}`,
+			};
 		}
 	};
 	return {
@@ -28,9 +42,9 @@ export function createStreamParser(): { push(chunk: string): StreamEvent[]; flus
 			return compact(lines.map(take));
 		},
 		flush() {
-			const event = take(buffer);
+			const events = compact([take(buffer)]);
 			buffer = "";
-			return event ? [event] : [];
+			return events;
 		},
 	};
 }
@@ -99,7 +113,7 @@ export function assistantStopReason(message: unknown): string {
 			: "";
 	return detail ? `${reason}: ${detail}` : reason;
 }
-function toolDetail(args: unknown): string {
+export function toolDetail(args: unknown): string {
 	if (!args || typeof args !== "object") {
 		return "";
 	}
@@ -111,6 +125,6 @@ function toolDetail(args: unknown): string {
 	}
 	return "";
 }
-function compact(events: Array<StreamEvent | undefined>): StreamEvent[] {
-	return events.filter((event): event is StreamEvent => event !== undefined);
+function compact(events: ReadonlyArray<StreamEvent | readonly StreamEvent[] | undefined>): StreamEvent[] {
+	return events.flatMap((event) => event ?? []);
 }

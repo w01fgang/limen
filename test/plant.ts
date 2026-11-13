@@ -1,5 +1,6 @@
 // The shared throwaway plant every scenario runs on: a temp Git repo after a real `limen init`, an environment built
-// from an allowlist, the scripted fake engine (test/fake-engine.mjs) as `pi` and `omp`, and a fetch sink that records
+// from an allowlist, the scripted fake engine (test/fake-engine.mjs) as `pi` and `omp`, the fake headless Claude Code
+// (test/fake-claude.mjs) as `claude`, and a fetch sink that records
 // every request a Limen process makes. Scenarios wait on `limen wait`, file events and FIFOs; nothing here sleeps.
 import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, watch } from "node:fs";
@@ -10,6 +11,7 @@ import { fileURLToPath } from "node:url";
 
 export const LIMEN = fileURLToPath(new URL("../bin/limen", import.meta.url));
 const FAKE_ENGINE = fileURLToPath(new URL("./fake-engine.mjs", import.meta.url));
+const FAKE_CLAUDE = fileURLToPath(new URL("./fake-claude.mjs", import.meta.url));
 
 export type Plant = {
 	readonly parent: string;
@@ -56,6 +58,7 @@ export async function plant(): Promise<Plant> {
 	const bin = join(parent, "bin");
 	await Promise.all([mkdir(bin), mkdir(join(parent, "home"))]);
 	await Promise.all(["pi", "omp"].map((name) => symlink(FAKE_ENGINE, join(bin, name))));
+	await symlink(FAKE_CLAUDE, join(bin, "claude"));
 	await writeFile(join(parent, "sink.mjs"), sinkSource(parent));
 	const env = {
 		PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin:/usr/sbin:/sbin`,

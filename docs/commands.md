@@ -18,8 +18,10 @@ Start a worker, a reviewer, or a job in one child repository, or continue a fini
 limen spawn --engine <engine> --provider <provider> --model <model> --thinking <level> "instruction" [--label L] [--branch B] [--role NAME] [--timeout 20m] [--task-file F|-] [--prepare CMD] [--priority 1|2|3] [--tab|--detached] [--extension PATH ...]
 limen spawn --engine <engine> --provider <provider> --model <model> --thinking <level> --repo R "instruction" [--label L]
 limen spawn --engine <engine> --provider <provider> --model <model> --thinking <level> --review --detached --branch B --label L [--base REF] [--head REF] "instruction"
-limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--engine pi|omp] [--provider P] [--model M] [--thinking T] [--tab|--detached] [--timeout D] [--priority 1|2|3] [--extension PATH ...]
+limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--engine pi|omp|claude] [--provider P] [--model M] [--thinking T] [--tab|--detached] [--timeout D] [--priority 1|2|3] [--extension PATH ...]
 limen spawn --engine devin [--provider macos|linux] [--model MODE] "instruction" [--label L] [--branch B] [--timeout 20m] [--task-file F|-]
+limen spawn --engine claude [--model MODEL] [--thinking low|medium|high|xhigh|max] "instruction" [--label L] [--branch B] [--timeout 20m] [--task-file F|-]
+limen context [--cue]
 ```
 
 **Start queue.** A detached job waits in the seat's start queue until the machine has room for it; see [Start queue](jobs.md#start-queue). Spawn and continue then print `queued <label>: <reading>, N ahead` before the ID. `--priority` sets the queue order: 1 is the most urgent, 2 is the default, and `continue` keeps the parent's priority unless it gets its own flag. The job records it in `priority`. Spawn when the work is ready; Limen starts the job and tells its coordinator.
@@ -35,6 +37,10 @@ For ordinary jobs, `continue` inherits the parent's list when no `--extension` i
 Only paths are retained, not extension source or dependency versions. Later edits or upgrades at those paths affect later launches. See [extension trust and model routes](setup.md#personal-model-routes-and-pi-extensions) before selecting third-party code.
 
 **Devin cloud jobs.** `--engine devin` runs the job as a Devin cloud session: `--provider` names the platform (`macos` or `linux`) and `--model` the Devin mode. The job pushes its branch to `origin`, follows the session into its log, and fast-forwards the worktree from the pushed branch when the session finishes; Devin's last message is the result. It runs detached only: spawn refuses `--tab`, `--thinking` and `--extension`, and `continue` and group teams refuse the engine. `limen stop` and the timeout terminate the session. Credentials, limits and failure reasons: [Devin cloud jobs](setup.md#devin-cloud-jobs).
+
+**Claude Code jobs.** `--engine claude` runs the job as headless Claude Code on the seat: `--model` names a Claude model or alias and `--thinking` the effort. It runs detached only: spawn refuses `--tab`, `--provider` and `--extension`, and group teams refuse the engine. `steer` and `continue` work. Sign-in, isolation and the turn sequence: [Claude Code jobs](setup.md#claude-code-jobs).
+
+**Coordinator guidance.** `limen context` prints the stable coordinator guidance for an agent that loads no Limen extension. `limen context --cue` answers a Claude Code `UserPromptSubmit` hook with the turn cue. See [A Claude Code coordinator](setup.md#a-claude-code-coordinator).
 
 ### Inspect jobs
 

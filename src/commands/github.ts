@@ -353,6 +353,9 @@ function jobFlags(
 		values.set(flag, value);
 	}
 	const engine = values.get("--engine");
+	if (engine === "claude") {
+		throw new Error("--engine claude runs detached only; a github job is hosted, so give it pi or omp");
+	}
 	const provider = values.get("--provider");
 	const model = values.get("--model");
 	const thinking = values.get("--thinking");

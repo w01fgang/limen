@@ -106,8 +106,8 @@ function teamRouteFlag(value: string): TeamRoute {
 		throw new Error(`${INVALID_TEAM}; the reasoning level is one of ${LEVELS.join(", ")}`);
 	}
 	const engine = resolveSpawnEngine(route[1]).id;
-	if (engine === "devin") {
-		throw new Error("--engine devin runs detached jobs only and cannot be a group team's engine");
+	if (engine === "devin" || engine === "claude") {
+		throw new Error(`--engine ${engine} runs detached jobs only and cannot be a group team's engine`);
 	}
 	return { engine, provider: route[2], model: route[3], thinking: route[4] };
 }

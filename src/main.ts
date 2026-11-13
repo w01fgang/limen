@@ -1,5 +1,6 @@
 import { boardCommand } from "./commands/board-view.ts";
 import { closeCommand } from "./commands/close.ts";
+import { contextCommand } from "./commands/context.ts";
 import { continueCommand } from "./commands/continue.ts";
 import { diffCommand } from "./commands/diff.ts";
 import { githubCommand } from "./commands/github.ts";
@@ -32,6 +33,7 @@ import { failInternalJob, runInternalJob } from "./runtime/wrapper.ts";
 
 type Command = (args: readonly string[], cwd: string) => Promise<void>;
 const COMMANDS = {
+	context: contextCommand,
 	init: initCommand,
 	workspace: workspaceCommand,
 	planning: planningCommand,
@@ -63,6 +65,7 @@ const COMMANDS = {
 	ticket: ticketCommand,
 	webhook: webhookCommand,
 } as const satisfies Record<
+	| "context"
 	| "init"
 	| "workspace"
 	| "planning"
@@ -100,6 +103,7 @@ usage:
   limen init
   limen init --drop-leftovers
   limen workspace init
+  limen context [--cue]                              # coordinator guidance for an agent without Limen extensions (Claude Code); --cue answers its UserPromptSubmit hook
   limen planning [committed|private]                # inspect or persist the project planning source; default committed
   limen group start FEATURE --team ENGINE:PROVIDER/MODEL:THINKING [--team …] [--rounds draft,critique,revise,final; default draft] [--workers N; default 0] [--timeout D; default 90m] [--extension PATH ...] [--team-extension team-N=PATH ...; Pi only] [--detached|--tab]
                                   # one agent per --team on its own route; Limen runs the rounds and tells the lead the result once
@@ -116,7 +120,8 @@ usage:
   limen spawn --engine <engine> --provider <provider> --model <model> --thinking <level> --repo R "Implement FNNN: <outcome>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L]
   limen spawn --engine <engine> --provider <provider> --model <model> --thinking <level> --review --detached --branch B --label L [--base SHA] [--head SHA] "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
   limen spawn --engine devin [--provider macos|linux] [--model MODE] "…" [--label L] [--task-file F|-]  # a Devin cloud session on the job branch; detached only, no --thinking
-  limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--engine pi|omp] [--provider P] [--model X] [--thinking T] [--tab|--detached] [--priority 1|2|3; default the parent's] [--extension PATH ...; replaces ordinary Pi list, group list stays fixed]
+  limen spawn --engine claude [--model MODEL] [--thinking low|medium|high|xhigh|max] "…" [--label L] [--task-file F|-]  # headless Claude Code; detached only, no --provider
+  limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--engine pi|omp|claude] [--provider P] [--model X] [--thinking T] [--tab|--detached] [--priority 1|2|3; default the parent's] [--extension PATH ...; replaces ordinary Pi list, group list stays fixed]
                                   # resume a finished job in its own engine session — full context, same worktree; Herdr default is hosted
   limen steer <id|suffix|label> | --running "correction"
   limen diff <id|suffix|label>

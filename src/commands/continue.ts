@@ -33,6 +33,7 @@ import {
 	recordedPlanningSource,
 	ticketPointers,
 } from "../project/planning.ts";
+import { preflightClaude } from "../runtime/claude.ts";
 import {
 	defaultModel,
 	type EngineId,
@@ -189,10 +190,17 @@ function chooseHostedContinue(options: ContinueOptions, grouped: boolean): boole
 	}
 	return hosted;
 }
+/** The model a continuation runs. Claude Code takes only its own models; without --model its configured model runs. */
+function continuationModel(profile: EngineProfile, options: ContinueOptions, hosted: boolean): string | undefined {
+	if (profile.id !== "claude") {
+		return options.model ?? defaultModel(options.review);
+	}
+	preflightClaude({ ...options, tab: hosted, extensions: options.selected }, false);
+	return options.model;
+}
 async function continueJob(args: readonly string[], cwd: string, locked = false, round?: number): Promise<void> {
 	const options = parseContinueArgs(args);
-	const { review, label, model, provider, thinking } = options;
-	const chosenModel = model ?? defaultModel(review);
+	const { review, label, provider, thinking } = options;
 
 	// A job that continues from its own worktree resolves jobs in its canonical root.
 	const inherited = workspaceRoot(cwd) ? undefined : inheritedPlanning(repoRoot(cwd));
@@ -209,6 +217,7 @@ async function continueJob(args: readonly string[], cwd: string, locked = false,
 	}
 	const parent = await readParentJob(root, parentId, parentDir, membership, options.engine);
 	const profile = engineProfile(parent.engine);
+	const chosenModel = continuationModel(profile, options, hosted);
 	const extensions = await continuationExtensions(parentDir, membership, options.selected, cwd, profile.id);
 	preflightEngine(profile, chosenModel, provider);
 	const source = recordedPlanningSource(parentDir);

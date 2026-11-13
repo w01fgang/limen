@@ -143,6 +143,15 @@ export default function limenCommunication(pi: PiApi): void {
 	});
 }
 
+/** A session's stable guidance and its turn cue, for an agent that loads no extension, such as Claude Code. */
+export function sessionContext(
+	root: string,
+	job: boolean,
+	prompt?: string,
+): { readonly system: string; readonly cue: string } {
+	return { system: guidancePrompt(root, job), cue: turnCue(root, job, isWakePrompt(prompt), undefined, undefined) };
+}
+
 function isWakePrompt(prompt: string | undefined): boolean {
 	return typeof prompt === "string" && prompt.startsWith("Limen job ");
 }

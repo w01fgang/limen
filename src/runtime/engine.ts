@@ -4,10 +4,10 @@ import { mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
-export type EngineId = "pi" | "omp" | "devin";
+export type EngineId = "pi" | "omp" | "devin" | "claude";
 export type EngineProfile = {
 	readonly id: EngineId;
-	readonly binaryEnv: "LIMEN_PI" | "LIMEN_OMP" | "LIMEN_DEVIN";
+	readonly binaryEnv: "LIMEN_PI" | "LIMEN_OMP" | "LIMEN_DEVIN" | "LIMEN_CLAUDE";
 	readonly binaryDefault: EngineId;
 	readonly herdrKind: EngineId;
 	readonly projectTrust: boolean;
@@ -64,19 +64,31 @@ export const ENGINES: { readonly [K in EngineId]: EngineProfile } = {
 		noTitle: false,
 		authCheck: false,
 	},
+	// A Claude Code job runs headless; `src/runtime/claude.ts` builds its command line and drives its stdin and stdout.
+	claude: {
+		id: "claude",
+		binaryEnv: "LIMEN_CLAUDE",
+		binaryDefault: "claude",
+		herdrKind: "claude",
+		projectTrust: false,
+		toolYolo: false,
+		sessionName: false,
+		noTitle: false,
+		authCheck: false,
+	},
 };
 export function engineProfile(id: string): EngineProfile {
-	if (id === "pi" || id === "omp" || id === "devin") {
+	if (id === "pi" || id === "omp" || id === "devin" || id === "claude") {
 		return ENGINES[id];
 	}
 	throw new Error(`unknown engine ${id}`);
 }
 export function resolveSpawnEngine(flag?: string): EngineProfile {
 	const raw = (flag ?? process.env.LIMEN_ENGINE)?.trim() || "pi";
-	if (raw === "pi" || raw === "omp" || raw === "devin") {
+	if (raw === "pi" || raw === "omp" || raw === "devin" || raw === "claude") {
 		return ENGINES[raw];
 	}
-	throw new Error("--engine must be pi, omp or devin");
+	throw new Error("--engine must be pi, omp, devin or claude");
 }
 export function engineBinary(profile: EngineProfile): string {
 	return process.env[profile.binaryEnv] ?? profile.binaryDefault;
